@@ -1,5 +1,6 @@
 import json
 
+from django.forms import model_to_dict
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import authenticate, login
@@ -16,6 +17,7 @@ def register(request):
         try:
             # print(request.body)
             data = json.loads(request.body)
+            print(data)
             username = data.get('username')
             email = data.get('email')
             password1 = data.get('password1')
@@ -46,13 +48,25 @@ def register(request):
 @csrf_exempt
 def login_user(request):
     # if request.method == "POST":
+    print(request.user)
     data = check_requests(request)
+    print(request.user.is_authenticated)
+    print(data)
     username = data.get('username')
+    if not username:
+        return JsonResponse({"code": "404.000.000", "message": "Username not found"})
     password = data.get('password')
+    if not password:
+        return JsonResponse({"code": "404.000.000", "message": "Password not found"})
     user = authenticate(request, username=username, password=password)
+    if not user:
+        return JsonResponse({"code": "404.000.000", "message": "User not found"})
     if user is not None:
         login(request, user)
-        return JsonResponse({"message": "Logged in successfully"}, status=200)
+        print(request.user)
+        print(user.is_authenticated)
+        data = model_to_dict(user)
+        return JsonResponse({"code": "200.000.000", "data": data, "message": "Logged in successfully"}, status=200)
     if not user:
         return JsonResponse({"message": "user not found "}, status=404)
     else:
@@ -82,11 +96,13 @@ def change_password(request):
 
 @login_required
 def logout_user(request):
+    id
     logout(request)
     return JsonResponse({'message': 'Someone is out '})
 
 
 def status(request):
+    print(request.user)
     if not request.user.is_authenticated:
         return JsonResponse({"message": "Not logged in"})
     else:
