@@ -7,6 +7,8 @@ from django.contrib.auth.models import User
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 
+from .backend.RequestEngines import check_requests
+
 
 @csrf_exempt
 def register(request):
@@ -30,6 +32,8 @@ def register(request):
 
             if User.objects.filter(email=email).exists():
                 return JsonResponse({"message": "email already exists try another one "})
+            # form = EmailForm(request.POST)
+            # if form.is_valid():
 
             user = User.objects.create_user(username=username, email=email, password=password1)
             user.save()
@@ -41,19 +45,16 @@ def register(request):
 
 @csrf_exempt
 def login_user(request):
-    if request.method == "POST":
-        data = json.loads(request.body)
-        username = data.get('username')
-        password = data.get('password')
-        user = authenticate(request, username=username, password=password)
-        if user is not None:
-            login(request, user)
-            return JsonResponse({"message": "Logged in successfully"}, status=200)
-            ...
-        else:
-            return JsonResponse({"message": "user not found "}, status=404)
-
-
+    # if request.method == "POST":
+    data = check_requests(request)
+    username = data.get('username')
+    password = data.get('password')
+    user = authenticate(request, username=username, password=password)
+    if user is not None:
+        login(request, user)
+        return JsonResponse({"message": "Logged in successfully"}, status=200)
+    if not user:
+        return JsonResponse({"message": "user not found "}, status=404)
     else:
         return JsonResponse({"message": "Invalid request"}, status=450)
 
@@ -66,7 +67,7 @@ def login_user(request):
     #     return {"code": "301", "message": "An error occured while trying to register"}
     # # return JsonResponse({'message': 'Someone is logged in'})
 
-
+@csrf_exempt
 def change_password(request):
     if request.method == "POST":
         data = json.loads(request.body)
