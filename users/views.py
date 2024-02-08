@@ -8,8 +8,11 @@ from django.contrib.auth.models import User
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 
+from base.models import State
 from .backend.RequestEngines import check_requests
+from .models import CustomUser
 
+user_service = CustomUser.objects
 
 @csrf_exempt
 def register(request):
@@ -22,22 +25,22 @@ def register(request):
             email = data.get('email')
             password1 = data.get('password1')
             password2 = data.get('password2')
-
+            state_active = State.objects.get(name="Active")
             if not username or not email or not password1 or not password2:
                 return JsonResponse({'message': 'Check the credentials and try again'})
 
             if password1 != password2:
                 return JsonResponse({'message': 'Passwords do not match'})
 
-            if User.objects.filter(username=username).exists():
+            if user_service.filter(username=username).exists():
                 return JsonResponse({"message": "Username already exists try another one "})
 
-            if User.objects.filter(email=email).exists():
+            if user_service.filter(email=email).exists():
                 return JsonResponse({"message": "email already exists try another one "})
             # form = EmailForm(request.POST)
             # if form.is_valid():
 
-            user = User.objects.create_user(username=username, email=email, password=password1)
+            user = user_service.create_user(username=username, email=email, password=password1, state=state_active)
             user.save()
             return JsonResponse({"message": "Register successful"}, status=201)
         except Exception as e:
@@ -87,17 +90,25 @@ def change_password(request):
         data = json.loads(request.body)
         username = data.get('username')
         newpassword = data.get('newpassword')
-        u = User.objects.get(username=username)
+        u = user_service.get(username=username)
         u.set_password(newpassword)
         u.save()
     else:
         return JsonResponse({"message":"Invalid request"}, status = 450)
 
 
-@login_required
+@csrf_exempt
 def logout_user(request):
-    id
-    logout(request)
+    data = json.loads(request.body)
+    id = data.get('user_id')
+    user = user_service.get(id=id)
+    print(user.is_authenticated)
+    print(request.user)
+    if user.is_authenticated:
+        print(request.user)
+        logout(request)
+        print(request.user)
+        print(user.is_authenticated)
     return JsonResponse({'message': 'Someone is out '})
 
 
