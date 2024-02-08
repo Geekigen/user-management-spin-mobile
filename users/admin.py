@@ -1,8 +1,8 @@
 from django.contrib import admin
 
 # Register your models here.
-from .models import user
-from .models import role
+from .models import CustomUser
+from .models import Role
 
-admin.site.register(user)
-admin.site.register(role)
+admin.site.register(CustomUser)
+admin.site.register(Role)
