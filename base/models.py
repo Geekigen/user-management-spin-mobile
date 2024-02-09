@@ -27,5 +27,7 @@ class GenericBaseModel(BaseModel):
 
 class State(GenericBaseModel):
 
+    objects = None
+
     def __str__(self):
         return self.name

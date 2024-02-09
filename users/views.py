@@ -1,16 +1,24 @@
 import json
 
+from django.contrib.auth.tokens import default_token_generator
+from django.contrib.sites.shortcuts import get_current_site
+from django.core.mail import EmailMessage
 from django.forms import model_to_dict
 from django.http import JsonResponse
+from django.utils.http import urlsafe_base64_encode
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.models import User
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
+from jwt.utils import force_bytes
 
 from base.models import State
 from .backend.RequestEngines import check_requests
-from .models import CustomUser
+from .backend.userstatus import is_user_logged_in
+from .backend.verificationCode import generateCode
+from .models import CustomUser, Otp
+from datetime import datetime, timedelta
 
 user_service = CustomUser.objects
 
@@ -90,11 +98,50 @@ def change_password(request):
         data = json.loads(request.body)
         username = data.get('username')
         newpassword = data.get('newpassword')
+        clientcode = data.get('code')
+        validcode =Otp.objects.filter(code=clientcode).get()
         u = user_service.get(username=username)
-        u.set_password(newpassword)
-        u.save()
+        if u and validcode:
+            validcodetime = validcode.date_created
+            validcodetime = validcodetime.replace(tzinfo=None)
+            current_time = datetime.now()
+            time_diff = current_time - validcodetime
+            if timedelta(minutes=10) > time_diff > timedelta(minutes=9):
+                u.set_password(newpassword)
+                u.save()
+            else:
+                return JsonResponse({"message": "otp expired generate another"}, status=450)
+        else:
+            return JsonResponse({"message": "Invalid code "}, status=450)
     else:
-        return JsonResponse({"message":"Invalid request"}, status = 450)
+        return JsonResponse({"message":"Invalid request"}, status=450)
+
+@csrf_exempt
+def forgotPassword(request):
+    if request.method == "POST":
+        data = json.loads(request.body)
+        email = data.get('email')
+        print(email)
+        if user_service.filter(email=email).exists():
+            user = user_service.filter(email=email).first()
+            if user:
+                token = generateCode()
+                otp = Otp.objects.create(code=token)
+                otp.save()
+                mail_subject = 'Password reset request'
+                message = f'your reset code is :{token}'
+                email = EmailMessage(
+                    mail_subject,
+                    message,
+                    to=[email]
+                )
+                email.send()
+                return JsonResponse({"message":"password sent to your mail"}, status = 200)
+        else:
+            return JsonResponse({"message": "Invalid email"}, status=450)
+    else:
+        return JsonResponse({"message": "Invalid request"}, status=450)
+
 
 
 @csrf_exempt
@@ -113,9 +160,9 @@ def logout_user(request):
 
 
 def status(request):
-    print(request.user)
-    if not request.user.is_authenticated:
-        return JsonResponse({"message": "Not logged in"})
+    user_id = 1  # Replace with the actual user ID
+    if is_user_logged_in(user_id):
+        print("User is logged in.")
     else:
-        return JsonResponse({"message": "logged in"})
-        # back to login page
+        print("User is not logged in.")
+
