@@ -9,12 +9,13 @@ from django.contrib.auth import logout
 from base.models import State
 from usermanagement import settings
 from .backend.RequestEngines import check_requests
+from .backend.logs import logit
+from .backend.validatejwt import authenticate_token
 from .backend.verificationCode import generateCode
-from .models import CustomUser, Otp
+from .models import CustomUser, Otp, Role
 from datetime import datetime, timedelta
 from django.contrib.auth import authenticate, login
-from rest_framework.authtoken.models import Token
-from django.http import JsonResponse, HttpResponseForbidden
+from django.http import JsonResponse
 
 user_service = CustomUser.objects
 
@@ -26,6 +27,7 @@ def register(request):
             data = json.loads(request.body)
             username = data.get('username')
             email = data.get('email')
+            user_role = data.get('user_role')
             password1 = data.get('password1')
             password2 = data.get('password2')
             state_active = State.objects.get(name="Active")
@@ -40,9 +42,10 @@ def register(request):
 
             if user_service.filter(email=email).exists():
                 return JsonResponse({"message": "email already exists try another one "}, status=401)
-
-            user = user_service.create_user(username=username, email=email, password=password1, state=state_active)
+            role = Role.objects.get(name=user_role)
+            user = user_service.create_user(username=username, email=email, role=role, password=password1, state=state_active)
             user.save()
+            logit(username, "registered")
             return JsonResponse({"message": "Register successful"}, status=201)
         except Exception as e:
             return JsonResponse({'message': str(e)})
@@ -63,9 +66,10 @@ def login_user(request):
     if not user:
         return JsonResponse({"code": "401.000.000", "message": "User not found"})
     elif user is not None:
+        logit(username, "loggedin")
         payload = {
             'id': user.id,
-            'exp': datetime.now() + timedelta(minutes=60),
+            'exp': datetime.now() + timedelta(minutes=1),
             'iat': datetime.now()
         }
         SECRET = settings.JWT_SECRET
@@ -73,12 +77,15 @@ def login_user(request):
         login(request, user)
         data = model_to_dict(user)
         json_response = JsonResponse({"code": "200.000.000", "data": data, "message": "Logged in successfully"},
-                            status=200)
+                                     status=200)
         json_response.set_cookie('token', token, httponly=True)
         return json_response
     else:
         return JsonResponse({"message": "Invalid request"}, status=450)
+
+
 @csrf_exempt
+@authenticate_token
 def change_password(request):
     if request.method == "POST":
         data = json.loads(request.body)
@@ -95,6 +102,7 @@ def change_password(request):
             if timedelta(minutes=10) > time_diff > timedelta(minutes=9):
                 u.set_password(newpassword)
                 u.save()
+                logit(username, "changedpassword")
             else:
                 return JsonResponse({"message": "otp expired generate another"}, status=450)
         else:
@@ -108,22 +116,22 @@ def forgotPassword(request):
     if request.method == "POST":
         data = json.loads(request.body)
         email = data.get('email')
-        print(email)
-        if user_service.filter(email=email).exists():
-            user = user_service.filter(email=email).first()
-            if user:
-                token = generateCode()
-                otp = Otp.objects.create(code=token)
-                otp.save()
-                mail_subject = 'Password reset request'
-                message = f'your reset code is :{token}'
-                email = EmailMessage(
-                    mail_subject,
-                    message,
-                    to=[email]
-                )
-                email.send()
-                return JsonResponse({"message": "password sent to your mail"}, status=200)
+        user = user_service.filter(email=email).first()
+        if user:
+            username = user.username
+            token = generateCode()
+            otp = Otp.objects.create(code=token)
+            otp.save()
+            mail_subject = 'Password reset request'
+            message = f'your reset code is :{token}'
+            email = EmailMessage(
+                mail_subject,
+                message,
+                to=[email]
+            )
+            email.send()
+            logit(username, "forgotpassword")
+            return JsonResponse({"message": "password sent to your mail"}, status=200)
         else:
             return JsonResponse({"message": "Invalid email"}, status=450)
     else:
@@ -132,30 +140,21 @@ def forgotPassword(request):
 
 @csrf_exempt
 def logout_user(request):
-    #
-    from django.contrib.auth import logout
-
-    def logout_user(request):
-        logout(request)
-        response = JsonResponse({"message": "Logged out successfully"})
-        response.delete_cookie('token')  # Clear token from the client-side
-        return response
-
-    #
-    data = json.loads(request.body)
-    id = data.get('user_id')
-    user = user_service.get(id=id)
-    print(user.is_authenticated)
-    print(request.user)
-    if user.is_authenticated:
-        print(request.user)
-        logout(request)
-        print(request.user)
-        print(user.is_authenticated)
-    return JsonResponse({'message': 'Someone is out '})
+    logout(request)
+    response = JsonResponse({"message": "Logged out successfully"})
+    token = request.COOKIES.get('token')
+    if not token:
+        return JsonResponse({"message": "Token not found kindly login"}, status=401)
+    payload = jwt.decode(token, settings.JWT_SECRET, algorithms=['HS256'])
+    user_id = payload['id']
+    user = user_service.get(id=user_id)
+    username = user.username
+    logit(username, "loggedout")
+    response.delete_cookie('token')
+    return response
 
 
 @csrf_exempt
+@authenticate_token
 def status(request):
-    # valid = validapi(request)
-    return ('hi')
+    return JsonResponse({"message":"hi"})

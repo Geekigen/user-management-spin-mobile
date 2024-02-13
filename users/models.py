@@ -4,17 +4,13 @@ from django.core.validators import validate_email
 from django.db import models
 
 from base.models import GenericBaseModel, State
+from usermanagement import settings
 
-
-# Create your models here.
-class CustomUser(User):
-    state = models.ForeignKey(State, related_name="user_states", on_delete=models.CASCADE)
-
-    def __str__(self):
-        return self.username
-
-    class Meta:
-        verbose_name = "User Identities"
+STATES = {
+    ("INA", "Inactive"),
+    ("SUS", "Suspended"),
+    ("AC", "Active"),
+}
 
 
 class Role(GenericBaseModel):
@@ -25,6 +21,17 @@ class Role(GenericBaseModel):
         return self.name
 
 
+class CustomUser(User):
+    role = models.ForeignKey(Role,  on_delete=models.CASCADE, null=True)
+    state = models.ForeignKey(State,  on_delete=models.CASCADE, null=True)
+
+    def __str__(self):
+        return self.username
+
+    class Meta:
+        verbose_name = "User Identities"
+
+
 class Otp(models.Model):
     code = models.CharField(max_length=6, unique=True)
     date_created = models.DateTimeField(auto_now_add=True)
@@ -32,3 +39,18 @@ class Otp(models.Model):
 
     def __str__(self):
         return self.code
+
+
+class LogType(GenericBaseModel):
+    code = models.CharField(max_length=6, unique=True)
+
+    def __str__(self):
+        return self.code
+
+
+class Log(GenericBaseModel):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    log_activity = models.ForeignKey(LogType, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return '%s' % self.date_created
