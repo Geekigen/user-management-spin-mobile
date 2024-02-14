@@ -22,8 +22,9 @@ class Role(GenericBaseModel):
 
 
 class CustomUser(User):
-    role = models.ForeignKey(Role,  on_delete=models.CASCADE, null=True)
-    state = models.ForeignKey(State,  on_delete=models.CASCADE, null=True)
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, null=True)
+    state = models.ForeignKey(State, on_delete=models.CASCADE, null=True)
+    emailverified = models.BooleanField(default=False)
 
     def __str__(self):
         return self.username
@@ -54,3 +55,10 @@ class Log(GenericBaseModel):
 
     def __str__(self):
         return '%s' % self.date_created
+
+
+class MailOtp(models.Model):
+    code = models.CharField(max_length=6, unique=True)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    date_created = models.DateTimeField(auto_now_add=True)
+    date_modified = models.DateTimeField(auto_now=True)
