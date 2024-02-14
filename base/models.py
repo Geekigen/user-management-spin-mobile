@@ -18,7 +18,7 @@ class BaseModel(models.Model):
 
 
 class GenericBaseModel(BaseModel):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100,null=True)
     description = models.TextField(null=True, blank=True)
 
     class Meta:
@@ -26,6 +26,8 @@ class GenericBaseModel(BaseModel):
 
 
 class State(GenericBaseModel):
+
+    objects = None
 
     def __str__(self):
         return self.name

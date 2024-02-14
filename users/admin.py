@@ -1,8 +1,9 @@
 from django.contrib import admin
 
-# Register your models here.
-from .models import CustomUser
-from .models import Role
+from .models import CustomUser, Role, Otp, Log, LogType, MailOtp
 
 admin.site.register(CustomUser)
 admin.site.register(Role)
+admin.site.register(Otp)
+admin.site.register(Log)
+admin.site.register(MailOtp)
