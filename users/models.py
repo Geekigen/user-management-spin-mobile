@@ -1,17 +1,8 @@
 import uuid
-from django.contrib.auth.models import User
-from django.core.validators import validate_email
+from django.contrib.auth.models import User, AbstractUser
 from django.db import models
 
 from base.models import GenericBaseModel, State
-from usermanagement import settings
-
-STATES = {
-    ("INA", "Inactive"),
-    ("SUS", "Suspended"),
-    ("AC", "Active"),
-}
-
 
 class Role(GenericBaseModel):
     uuid = models.UUIDField(max_length=100, default=uuid.uuid4, unique=True, primary_key=True, editable=False)
@@ -21,7 +12,8 @@ class Role(GenericBaseModel):
         return self.name
 
 
-class CustomUser(User):
+class CustomUser(AbstractUser):
+    uuid = models.UUIDField(max_length=100, default=uuid.uuid4, unique=True, primary_key=True, editable=False)
     role = models.ForeignKey(Role, on_delete=models.CASCADE, null=True)
     state = models.ForeignKey(State, on_delete=models.CASCADE, null=True)
     emailverified = models.BooleanField(default=False)

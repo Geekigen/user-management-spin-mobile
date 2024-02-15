@@ -17,6 +17,7 @@ urlpatterns = [
         path('logout/', views.logout_user),
         path('confirmEmail/', views.confirm_mail),
         path('changecredentials/', views.changecredentials),
+        path('validatetoken/', views.verfyTokens),
 
     ])),
     ]

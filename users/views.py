@@ -9,6 +9,7 @@ from django.contrib.auth import logout
 from base.models import State
 from usermanagement import settings
 from .backend.RequestEngines import check_requests
+from .backend.apitokenhandler import handleToken
 from .backend.logs import logit
 from .backend.sendotpmail import send_Otp
 from .backend.validatejwt import authenticate_token
@@ -88,7 +89,7 @@ def login_user(request):
 
         logit(username, "loggedin")
         payload = {
-            'id': user.id,
+            'id': str(user.uuid),
             'exp': datetime.now() + timedelta(minutes=1),
             'iat': datetime.now()
         }
@@ -96,6 +97,8 @@ def login_user(request):
         token = jwt.encode(payload, SECRET, algorithm='HS256')
         login(request, user)
         data = model_to_dict(custom)
+        data['uuid'] = user.uuid
+        data['token'] = token
         json_response = JsonResponse({"code": "200.000.000", "data": data, "message": "Logged in successfully"},
                                      status=200)
         json_response.set_cookie('token', token, httponly=True)
@@ -126,6 +129,13 @@ def change_password(request):
             return JsonResponse({"message": "otp expired generate another"}, status=450)
     else:
         return JsonResponse({"message": "Invalid code "}, status=450)
+
+
+@csrf_exempt
+def verfyTokens(request):
+    data = check_requests(request)
+    token = data.get('token')
+    handleToken(token)
 
 
 @csrf_exempt
