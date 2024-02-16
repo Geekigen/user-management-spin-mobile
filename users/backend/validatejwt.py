@@ -16,14 +16,14 @@ def authenticate_token(view_func):
         try:
             payload = jwt.decode(token, settings.JWT_SECRET, algorithms=['HS256'])
             user_id = payload['id']
-            user = CustomUser.objects.get(id=user_id)
+            user = CustomUser.objects.get(uuid=user_id)
             request.user = user
             return view_func(request, *args, **kwargs)
         except jwt.ExpiredSignatureError:
             return JsonResponse({"message": "Token expired. Kindly login."}, status=401)
         except jwt.InvalidTokenError:
             return JsonResponse({"message": "Invalid token. Try logging in."}, status=401)
-        except user.DoesNotExist:
+        except User.DoesNotExist:
             return JsonResponse({"message": "User not found. Try logging in."}, status=401)
 
     return wrapper
