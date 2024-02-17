@@ -75,13 +75,13 @@ def login_user(request):
     data = check_requests(request)
     username = data.get('username')
     if not username:
-        return JsonResponse({"code": "404.000.000", "message": "Username not found"})
+        return JsonResponse({"code": "404.000.000", "message": "Username not found"}, status=404)
     password = data.get('password')
     if not password:
-        return JsonResponse({"code": "404.000.000", "message": "Password not found"})
+        return JsonResponse({"code": "404.000.000", "message": "Password not found"}, status=404)
     user = authenticate(request, username=username, password=password)
     if not user:
-        return JsonResponse({"code": "401.000.000", "message": "User not found"})
+        return JsonResponse({"code": "401.000.000", "message": "User not found"}, status=401)
     elif user is not None:
         custom = user_service.filter(username=user).get()
         if not custom.emailverified:
@@ -90,7 +90,7 @@ def login_user(request):
         logit(username, "loggedin")
         payload = {
             'id': str(user.uuid),
-            'exp': datetime.now() + timedelta(minutes=1),
+            'exp': datetime.now() + timedelta(minutes=10),
             'iat': datetime.now()
         }
         SECRET = settings.JWT_SECRET
@@ -112,9 +112,11 @@ def login_user(request):
 def change_password(request):
     data = check_requests(request)
     username = data.get('username')
-    newpassword = data.get('newpassword')
+    newpassword = data.get('new_password')
     clientcode = data.get('code')
-    validcode = Otp.objects.filter(code=clientcode).get()
+    if not clientcode:
+        return JsonResponse({"message": "No code inputed"}, status=450)
+    validcode = Otp.objects.filter(code=clientcode)
     u = user_service.get(username=username)
     if u and validcode:
         validcodetime = validcode.date_created
@@ -133,9 +135,10 @@ def change_password(request):
 
 @csrf_exempt
 def verfyTokens(request):
-    data = check_requests(request)
+    data = check_requests(  request)
     token = data.get('token')
-    handleToken(token)
+    response = handleToken(token)
+    return response
 
 
 @csrf_exempt
@@ -149,9 +152,9 @@ def changecredentials(request):
     user_id = payload['id']
     user = user_service.get(id=user_id)
     username = user.username
-    newusername = data.get('newusername')
+    newusername = data.get('new_username')
     email = data.get('email')
-    user_role = data.get('user_role')
+    user_role = data.get('role')
     password1 = data.get('password1')
     password2 = data.get('password2')
     state_active = State.objects.get(name="Active")
@@ -222,6 +225,5 @@ def logout_user(request):
 
 
 @csrf_exempt
-@authenticate_token
 def status(request):
     return JsonResponse({"message": "hi"})
