@@ -26,30 +26,34 @@ user_service = CustomUser.objects
 def register(request):
     data = check_requests(request)
     username = data.get('username')
-    email = data.get('email')
+    mail = data.get('email')
     user_role = data.get('user_role')
     password1 = data.get('password1')
     password2 = data.get('password2')
     state_active = State.objects.get(name="Active")
-    if not username or not email or not password1 or not password2:
-        return JsonResponse({'message': 'Check the credentials and try again'}, status=401)
+    if not username or not mail or not password1 or not password2:
+        print("one")
+        return JsonResponse({'message': 'Check the credentials and try again', "code": "401"}, status=401)
 
     if password1 != password2:
+        print("two")
         return JsonResponse({'message': 'Passwords do not match'}, status=401)
 
-    if user_service.filter(username=username).exists():
-        return JsonResponse({"message": "Username already exists try another one "}, status=401)
+    if CustomUser.objects.filter(username=username).exists():
+        return JsonResponse({"message": "Username already exists try another one ", "code": "401"}, status=401)
 
-    if user_service.filter(email=email).exists():
-        return JsonResponse({"message": "email already exists try another one "}, status=401)
+    if user_service.filter(email=mail).exists():
+        print("four")
+        return JsonResponse({"message": "email already exists try another one ", "code": "401"}, status=401)
     role = Role.objects.get(name=user_role)
     token = generateCode()
-    user = user_service.create_user(username=username, email=email, role=role,
+    user = user_service.create_user(username=username, email=mail, role=role,
                                     password=password1, state=state_active)
-    send_Otp(email, token)
+    send_Otp(mail, token)
     user.save()
     logit(username, "registered")
-    return JsonResponse({"message": "Register successful.Check your email for confirmation code"}, status=201)
+    return JsonResponse({"message": "Register successful.Check your email for confirmation code", "code": "201"},
+                        status=201)
 
 
 @csrf_exempt
@@ -61,13 +65,13 @@ def confirm_mail(request):
     validcode = MailOtp.objects.filter(code=confirmationcode, user=registered).exists()
     if validcode:
         if registered.emailverified:
-            return JsonResponse({"message": "Email already confirmed."}, status=200)
+            return JsonResponse({"message": "Email already confirmed.", "code": "200"}, status=200)
         else:
             registered.emailverified = True
             registered.save()
-            return JsonResponse({"message": "Email confirmation successful."}, status=200)
+            return JsonResponse({"message": "Email confirmation successful.", "code": "200"}, status=200)
     else:
-        return JsonResponse({"message": "Invalid email or Verification code try again."}, status=401)
+        return JsonResponse({"message": "Invalid email or Verification code try again.", "code": "401"}, status=401)
 
 
 @csrf_exempt
@@ -75,17 +79,27 @@ def login_user(request):
     data = check_requests(request)
     username = data.get('username')
     if not username:
-        return JsonResponse({"code": "404.000.000", "message": "Username not found"}, status=404)
+        return JsonResponse({"code": "404", "message": "Username not found"}, status=404)
     password = data.get('password')
     if not password:
-        return JsonResponse({"code": "404.000.000", "message": "Password not found"}, status=404)
+        return JsonResponse({"code": "404", "message": "Password not found"}, status=404)
     user = authenticate(request, username=username, password=password)
     if not user:
-        return JsonResponse({"code": "401.000.000", "message": "User not found"}, status=401)
+        return JsonResponse({"code": "401", "message": "Wrong credentials!! check username or password"}, status=401)
     elif user is not None:
         custom = user_service.filter(username=user).get()
+        Custom_role = Role.objects.get(name=custom.role.name)
+        role_permissions = Custom_role.permissions.all()
+        role_permission = list() #innitialized a list ... watch the names for the confussion "rat factory"
+        for permission in role_permissions:
+            role_permission.append(permission.name)
+
         if not custom.emailverified:
-            return JsonResponse({"message": "Email not verified.Verify your email"}, status=401)
+            token = generateCode()
+            send_Otp(custom.email, token)
+            return JsonResponse(
+                {"message": "Email not verified.check your email for verification code", "email": custom.email,
+                 "code": "450"}, status=401)
 
         logit(username, "loggedin")
         payload = {
@@ -99,43 +113,44 @@ def login_user(request):
         data = model_to_dict(custom)
         data['uuid'] = user.uuid
         data['token'] = token
-        json_response = JsonResponse({"code": "200.000.000", "data": data, "message": "Logged in successfully"},
-                                     status=200)
+        json_response = JsonResponse(
+            {"code": "200", "data": data, "permissions": role_permission, "message": "Logged in successfully"},
+            status=200)
         json_response.set_cookie('token', token, httponly=True)
         return json_response
     else:
-        return JsonResponse({"message": "Invalid request"}, status=450)
+        return JsonResponse({"message": "Invalid request", "code": "450"}, status=450)
 
 
 @csrf_exempt
-@authenticate_token
 def change_password(request):
     data = check_requests(request)
-    username = data.get('username')
+    email = data.get('email')
     newpassword = data.get('new_password')
     clientcode = data.get('code')
     if not clientcode:
-        return JsonResponse({"message": "No code inputed"}, status=450)
-    validcode = Otp.objects.filter(code=clientcode)
-    u = user_service.get(username=username)
+        return JsonResponse({"message": "No code inputed", "code": "450"}, status=450)
+    validcode = Otp.objects.filter(code=clientcode).get()
+    u = user_service.get(email=email)
     if u and validcode:
         validcodetime = validcode.date_created
         validcodetime = validcodetime.replace(tzinfo=None)
         current_time = datetime.now()
         time_diff = current_time - validcodetime
-        if timedelta(minutes=10) > time_diff > timedelta(minutes=9):
+        if time_diff < timedelta(minutes=60):
             u.set_password(newpassword)
             u.save()
-            logit(username, "changedpassword")
+            logit(u.username, "changedpassword")
+            return JsonResponse({"message": "Password changed successfully", "code": "200"}, status=200)
         else:
-            return JsonResponse({"message": "otp expired generate another"}, status=450)
+            return JsonResponse({"message": "otp expired generate another", "code": "450"}, status=450)
     else:
-        return JsonResponse({"message": "Invalid code "}, status=450)
+        return JsonResponse({"message": "Invalid code ", "code": "450"}, status=450)
 
 
 @csrf_exempt
 def verfyTokens(request):
-    data = check_requests(  request)
+    data = check_requests(request)
     token = data.get('token')
     response = handleToken(token)
     return response
@@ -147,46 +162,47 @@ def changecredentials(request):
     data = check_requests(request)
     token = request.COOKIES.get('token')
     if not token:
-        return JsonResponse({"message": "Token not found kindly login"}, status=401)
+        return JsonResponse({"message": "Token not found kindly login", "code": "401"}, status=401)
     payload = jwt.decode(token, settings.JWT_SECRET, algorithms=['HS256'])
     user_id = payload['id']
     user = user_service.get(id=user_id)
     username = user.username
     newusername = data.get('new_username')
-    email = data.get('email')
+    mail = data.get('email')
     user_role = data.get('role')
     password1 = data.get('password1')
     password2 = data.get('password2')
     state_active = State.objects.get(name="Active")
-    if not newusername or not email or not password1 or not password2:
-        return JsonResponse({'message': 'Check the credentials and try again'}, status=401)
+    if not newusername or not mail or not password1 or not password2:
+        return JsonResponse({'message': 'Check the credentials and try again', "code": "401"}, status=401)
 
     if password1 != password2:
-        return JsonResponse({'message': 'Passwords do not match'}, status=401)
+        return JsonResponse({'message': 'Passwords do not match', "code": "401"}, status=401)
 
     if user_service.filter(username=newusername).exists():
-        return JsonResponse({"message": "Username already exists try another one "}, status=401)
+        return JsonResponse({"message": "Username already exists try another one ", "code": "401"}, status=401)
 
-    if user_service.filter(email=email).exists():
-        return JsonResponse({"message": "email already exists try another one "}, status=401)
+    if user_service.filter(email=mail).exists():
+        return JsonResponse({"message": "email already exists try another one ", "code": "401"}, status=401)
     token = generateCode()
     user = CustomUser.objects.get(pk=user_id)
     user.username = newusername
-    user.email = email
+    user.email = mail
     user.role = user_role
     user.set_password(password2)
-    send_Otp(email, token)
+    send_Otp(mail, token)
     user.save()
     logit(username, "changedcredials")
-    return JsonResponse({"message": "Reset successful.Check your New Email for confirmation code"}, status=201)
+    return JsonResponse({"message": "Reset successful.Check your New Email for confirmation code", "code": "201"},
+                        status=201)
 
 
 @csrf_exempt
 def forgotPassword(request):
     if request.method == "POST":
         data = json.loads(request.body)
-        email = data.get('email')
-        user = user_service.filter(email=email).first()
+        mail = data.get('email')
+        user = user_service.filter(email=mail).first()
         if user:
             username = user.username
             token = generateCode()
@@ -197,15 +213,15 @@ def forgotPassword(request):
             email = EmailMessage(
                 mail_subject,
                 message,
-                to=[email]
+                to=[user.email]
             )
             email.send()
             logit(username, "forgotpassword")
-            return JsonResponse({"message": "password sent to your mail"}, status=200)
+            return JsonResponse({"message": "password sent to your mail", "code": "200"}, status=200)
         else:
-            return JsonResponse({"message": "Invalid email"}, status=450)
+            return JsonResponse({"message": "Invalid email", "code": "450"}, status=450)
     else:
-        return JsonResponse({"message": "Invalid request"}, status=450)
+        return JsonResponse({"message": "Invalid request", "code": "450"}, status=450)
 
 
 @csrf_exempt
@@ -217,7 +233,7 @@ def logout_user(request):
         return JsonResponse({"message": "Token not found kindly login"}, status=401)
     payload = jwt.decode(token, settings.JWT_SECRET, algorithms=['HS256'])
     user_id = payload['id']
-    user = user_service.get(id=user_id)
+    user = user_service.get(uuid=user_id)
     username = user.username
     logit(username, "loggedout")
     response.delete_cookie('token')

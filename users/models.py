@@ -4,9 +4,18 @@ from django.db import models
 
 from base.models import GenericBaseModel, State
 
+
+class CustomPermissions(GenericBaseModel):
+
+
+    def __str__(self):
+        return self.name
+
+
 class Role(GenericBaseModel):
     uuid = models.UUIDField(max_length=100, default=uuid.uuid4, unique=True, primary_key=True, editable=False)
     state = models.ForeignKey(State, related_name="role_states", on_delete=models.CASCADE)
+    permissions = models.ManyToManyField(CustomPermissions)
 
     def __str__(self):
         return self.name

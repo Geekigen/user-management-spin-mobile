@@ -9,6 +9,7 @@ def check_requests(request):
     data = {}
     if method == "POST":
         data = json.loads(request.body)
+        print(data)
         return data
     else:
         return JsonResponse({"message": "Wrong request method"}, status=401)
