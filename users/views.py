@@ -32,18 +32,15 @@ def register(request):
     password2 = data.get('password2')
     state_active = State.objects.get(name="Active")
     if not username or not mail or not password1 or not password2:
-        print("one")
         return JsonResponse({'message': 'Check the credentials and try again', "code": "401"}, status=401)
 
     if password1 != password2:
-        print("two")
         return JsonResponse({'message': 'Passwords do not match'}, status=401)
 
     if CustomUser.objects.filter(username=username).exists():
         return JsonResponse({"message": "Username already exists try another one ", "code": "401"}, status=401)
 
     if user_service.filter(email=mail).exists():
-        print("four")
         return JsonResponse({"message": "email already exists try another one ", "code": "401"}, status=401)
     role = Role.objects.get(name=user_role)
     token = generateCode()
@@ -89,8 +86,9 @@ def login_user(request):
     elif user is not None:
         custom = user_service.filter(username=user).get()
         Custom_role = Role.objects.get(name=custom.role.name)
+        # print(Custom_role)
         role_permissions = Custom_role.permissions.all()
-        role_permission = list() #innitialized a list ... watch the names for the confussion "rat factory"
+        role_permission = list()
         for permission in role_permissions:
             role_permission.append(permission.name)
 
@@ -104,7 +102,7 @@ def login_user(request):
         logit(username, "loggedin")
         payload = {
             'id': str(user.uuid),
-            'exp': datetime.now() + timedelta(minutes=10),
+            'exp': datetime.now() + timedelta(minutes=1000),
             'iat': datetime.now()
         }
         SECRET = settings.JWT_SECRET
@@ -113,6 +111,7 @@ def login_user(request):
         data = model_to_dict(custom)
         data['uuid'] = user.uuid
         data['token'] = token
+        data['role'] = Custom_role.name
         json_response = JsonResponse(
             {"code": "200", "data": data, "permissions": role_permission, "message": "Logged in successfully"},
             status=200)
@@ -157,19 +156,16 @@ def verfyTokens(request):
 
 
 @csrf_exempt
-@authenticate_token
+# @authenticate_token
 def changecredentials(request):
     data = check_requests(request)
-    token = request.COOKIES.get('token')
-    if not token:
-        return JsonResponse({"message": "Token not found kindly login", "code": "401"}, status=401)
-    payload = jwt.decode(token, settings.JWT_SECRET, algorithms=['HS256'])
-    user_id = payload['id']
-    user = user_service.get(id=user_id)
+    user_id = data.get('user_id')
+    user = user_service.get(uuid=user_id)
     username = user.username
     newusername = data.get('new_username')
     mail = data.get('email')
-    user_role = data.get('role')
+    named_user_role = data.get('role')
+    user_role = Role.objects.filter(name=named_user_role).get()
     password1 = data.get('password1')
     password2 = data.get('password2')
     state_active = State.objects.get(name="Active")
@@ -179,10 +175,10 @@ def changecredentials(request):
     if password1 != password2:
         return JsonResponse({'message': 'Passwords do not match', "code": "401"}, status=401)
 
-    if user_service.filter(username=newusername).exists():
+    if user_service.filter(username=newusername).exclude(uuid=user_id).exists():
         return JsonResponse({"message": "Username already exists try another one ", "code": "401"}, status=401)
 
-    if user_service.filter(email=mail).exists():
+    if user_service.filter(email=mail).exclude(uuid=user_id).exists():
         return JsonResponse({"message": "email already exists try another one ", "code": "401"}, status=401)
     token = generateCode()
     user = CustomUser.objects.get(pk=user_id)
@@ -193,8 +189,8 @@ def changecredentials(request):
     send_Otp(mail, token)
     user.save()
     logit(username, "changedcredials")
-    return JsonResponse({"message": "Reset successful.Check your New Email for confirmation code", "code": "201"},
-                        status=201)
+    return JsonResponse({"message": "Reset successful.Check your New Email for confirmation code", "code": "200"},
+                        status=200)
 
 
 @csrf_exempt
